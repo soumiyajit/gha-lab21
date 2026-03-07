@@ -1,0 +1,61 @@
+name: Reusable Build Generator
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: 'The subdirectory or service to test'
+        required: true
+        type: string
+      node-version:
+        description: 'The version of Node.js to use'
+        required: false
+        type: string
+        default: '20'
+    outputs:
+      build-tag:
+        description: "The unique generated build signature"
+        value: ${{ jobs.run-tests-and-id.outputs.build_id }}
+
+jobs:
+  run-tests-and-id:
+    runs-on: ubuntu-latest
+    # Map the step output to the job output
+    outputs:
+      build_id: ${{ steps.create_tag.outputs.tag }}
+    
+    # Spin up MongoDB for the tests in this job
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Generate Unique Signature
+        id: create_tag
+        run: |
+          # Create a signature using the date and short commit SHA
+          TAG="synapse-v1.$(date +'%m%d')-${GITHUB_SHA::7}"
+          echo "Generated Tag: $TAG"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+          cache-dependency-path: ${{ inputs.service-name }}/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: ${{ inputs.service-name }}
+
+      - name: Execute Service Test
+        run: npm test -- --watchAll=false --silent
+        working-directory: ${{ inputs.service-name }}
+        env:
+          MONGODB_URI: mongodb://localhost:27017/test_db

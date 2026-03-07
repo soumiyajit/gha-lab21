@@ -1,0 +1,35 @@
+name: Main Academia Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # Job 1: Testing the backend (Generates an ID)
+  test-backend:
+    uses: ./.github/workflows/reusable-builder.yml
+    with:
+      service-name: 'backend'
+      node-version: '18'
+
+  # Job 2: Testing the frontend (Generates an ID)
+  test-frontend:
+    uses: ./.github/workflows/reusable-builder.yml
+    with:
+      service-name: 'frontend'
+      node-version: '20'
+
+  # Logic: Only deploy if BOTH test suites pass
+  deploy-phase:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploying Academia Synapse
+        run: |
+          # You can now reference the unique tags from either test job
+          echo "Deploying Backend Version: ${{ needs.test-backend.outputs.build-tag }}"
+          echo "Deploying Frontend Version: ${{ needs.test-frontend.outputs.build-tag }}"
+          echo "Ready for deployment ...."
